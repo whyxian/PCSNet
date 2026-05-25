@@ -8,23 +8,17 @@ import numpy as np
 import torch
 from torch.utils.data import Dataset
 from torchvision import transforms as T
+from torchvision.transforms import InterpolationMode
 
 from self_sup_tasks import patch_ex
 
 URL = 'ftp://guest:GU.205dldo@ftp.softronics.ch/mvtec_anomaly_detection/mvtec_anomaly_detection.tar.xz'
-CLASS_NAMES = ['bottle','cable', 'capsule', 'carpet', 'grid',
-               'hazelnut', 'leather', 'metal_nut', 'pill', 'screw',
-               'tile', 'toothbrush', 'transistor', 'wood', 'zipper']
-OBJECTS = ['bottle', 'cable', 'capsule', 'hazelnut', 'metal_nut',
-           'pill', 'screw', 'toothbrush', 'transistor', 'zipper']
-TEXTURES = ['carpet', 'grid', 'leather', 'tile', 'wood']
 
 
 class SelfSupMVTecDataset(Dataset):
     def __init__(self, root_path='../data', class_name='bottle', is_train=True,
                  low_res=256, transform=None,
                  self_sup_args={}):
-        assert class_name in CLASS_NAMES, 'class_name: {}, should be in {}'.format(class_name, CLASS_NAMES)
         self.root_path = root_path
         self.class_name = class_name
         self.is_train = is_train
@@ -90,7 +84,7 @@ class SelfSupMVTecDataset(Dataset):
             img_type_dir = os.path.join(img_dir, img_type)
             img_fpath_list = sorted([os.path.join(img_type_dir, f)
                                      for f in os.listdir(img_type_dir)
-                                     if f.endswith('.png')])
+                                     if f.endswith(('.png', '.jpg', '.jpeg'))])
             ################ random chose 2 images
             indices = torch.randint(0, len(img_fpath_list), (2,))
             for i in range(len(indices)):
@@ -109,7 +103,7 @@ class SelfSupMVTecDataset(Dataset):
 
         assert len(x_paths) == len(y), 'number of x and y should be same'
 
-        transform = T.Resize(low_res, Image.ANTIALIAS)
+        transform = T.Resize(low_res, InterpolationMode.LANCZOS)
         xs = []
         for path in x_paths:
             xs.append(transform(Image.open(path).convert('RGB')))

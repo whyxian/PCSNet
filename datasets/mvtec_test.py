@@ -3,14 +3,10 @@ from PIL import Image
 import torch
 from torch.utils.data import Dataset
 from torchvision import transforms as T
-
-CLASS_NAMES  = ['bottle', 'cable', 'capsule', 'carpet', 'grid',
-                'hazelnut', 'leather', 'metal_nut', 'pill', 'screw',
-                'tile', 'toothbrush', 'transistor', 'wood', 'zipper']
+from torchvision.transforms import InterpolationMode
 
 class MVTecDataset(Dataset):
     def __init__(self, dataset_path, class_name='bottle', is_train=True, resize=256, cropsize=224, wild_ver=False):
-        assert class_name in CLASS_NAMES, 'class_name: {}, should be in {}'.format(class_name, CLASS_NAMES)
         self.dataset_path = dataset_path
         self.class_name = class_name
         self.is_train = is_train
@@ -20,26 +16,26 @@ class MVTecDataset(Dataset):
         self.x, self.y, self.mask = self.load_dataset_folder()
 
         if wild_ver:
-            self.transform_x =   T.Compose([T.Resize(resize, Image.ANTIALIAS),
+            self.transform_x =   T.Compose([T.Resize(resize, InterpolationMode.LANCZOS),
                                             T.RandomRotation(10),
                                             T.RandomCrop(cropsize),
                                             T.ToTensor(),
                                             T.Normalize(mean=[0.485, 0.456, 0.406],
                                                         std=[0.229, 0.224, 0.225])])
 
-            self.transform_mask =    T.Compose([T.Resize(resize, Image.NEAREST),
+            self.transform_mask =    T.Compose([T.Resize(resize, InterpolationMode.NEAREST),
                                                 T.RandomRotation(10),
                                                 T.RandomCrop(cropsize),
                                                 T.ToTensor()])
-                                                
+
         else:
-            self.transform_x =   T.Compose([T.Resize(resize, Image.ANTIALIAS),
+            self.transform_x =   T.Compose([T.Resize(resize, InterpolationMode.LANCZOS),
                                             T.CenterCrop(cropsize),
                                             T.ToTensor(),
                                             T.Normalize(mean=[0.485, 0.456, 0.406],
                                                         std=[0.229, 0.224, 0.225])])
 
-            self.transform_mask =    T.Compose([T.Resize(resize, Image.NEAREST),
+            self.transform_mask =    T.Compose([T.Resize(resize, InterpolationMode.NEAREST),
                                                 T.CenterCrop(cropsize),
                                                 T.ToTensor()])
 
@@ -48,7 +44,7 @@ class MVTecDataset(Dataset):
         x = Image.open(x).convert('RGB')
         x = self.transform_x(x)
 
-        if y == 0:
+        if y == 0 or mask is None:
             mask = torch.zeros([1, self.cropsize, self.cropsize])
         else:
             mask = Image.open(mask)
@@ -74,7 +70,7 @@ class MVTecDataset(Dataset):
                 continue
             img_fpath_list = sorted([os.path.join(img_type_dir, f)
                                     for f in os.listdir(img_type_dir)
-                                    if f.endswith('.png')])
+                                    if f.endswith(('.png', '.jpg', '.jpeg'))])
             x.extend(img_fpath_list)
 
             if img_type == 'good':
@@ -84,10 +80,15 @@ class MVTecDataset(Dataset):
                 y.extend([1] * len(img_fpath_list))
                 gt_type_dir = os.path.join(gt_dir, img_type)
                 img_fname_list = [os.path.splitext(os.path.basename(f))[0] for f in img_fpath_list]
-                gt_fpath_list = [os.path.join(gt_type_dir, img_fname + '_mask.png')
-                                for img_fname in img_fname_list]
-
-                mask.extend(gt_fpath_list)
+                for img_fname in img_fname_list:
+                    gt_path = os.path.join(gt_type_dir, img_fname + '_mask.png')
+                    gt_path_jpg = os.path.join(gt_type_dir, img_fname + '_mask.jpg')
+                    if os.path.exists(gt_path):
+                        mask.append(gt_path)
+                    elif os.path.exists(gt_path_jpg):
+                        mask.append(gt_path_jpg)
+                    else:
+                        mask.append(None)
 
         assert len(x) == len(y), 'number of x and y should be same'
 
