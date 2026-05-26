@@ -206,6 +206,7 @@ def parse_args():
     parser = argparse.ArgumentParser('CFA configuration')
     parser.add_argument('--data_path', type=str, default='./datasets/mvtec')
     parser.add_argument('--save_path', type=str, default='./mvtec_result')
+    parser.add_argument('--model_save_path', type=str, default='./saved_models')
     parser.add_argument("-s", "--setting", type=str, default="Shift-Intensity-923874273")
     parser.add_argument('--Rd', type=bool, default=False)
     parser.add_argument('--size', type=int, choices=[224, 256], default=224)
@@ -243,6 +244,11 @@ def run():
         BACKGROUND = {'bracket_white': (130, 60), 'bottle': (200, 60), 'screw': (200, 60), 'capsule': (200, 60),
                       'zipper': (200, 60),
                       'hazelnut': (20, 20), 'pill': (20, 20), 'toothbrush': (20, 20), 'metal_nut': (20, 20)}
+
+        # Create model save directory
+        os.makedirs(args.model_save_path, exist_ok=True)
+        class_model_dir = os.path.join(args.model_save_path, class_name)
+        os.makedirs(class_model_dir, exist_ok=True)
 
         # load data
         train_transform = T.Compose([
@@ -358,7 +364,47 @@ def run():
 
                 print('[%d / %d]image ROCAUC: %.3f | best: %.3f' % (epoch, epochs, img_roc_auc, best_img_roc))
 
+                # Save best model
+                if img_roc_auc == best_img_roc:
+                    checkpoint = {
+                        'epoch': epoch,
+                        'A_state_dict': A.state_dict(),
+                        'CAS_state_dict': CAS.state_dict(),
+                        'best_img_roc': best_img_roc,
+                        'class_name': class_name
+                    }
+                    save_path = os.path.join(class_model_dir, 'best_model.pth')
+                    torch.save(checkpoint, save_path)
+                    print(f'Saved best model to {save_path}')
+                
+                # Save latest model every 10 epochs
+                if epoch % 10 == 0:
+                    checkpoint_latest = {
+                        'epoch': epoch,
+                        'A_state_dict': A.state_dict(),
+                        'CAS_state_dict': CAS.state_dict(),
+                        'optimizer_state_dict': optimizer.state_dict(),
+                        'img_roc': img_roc_auc,
+                        'class_name': class_name
+                    }
+                    save_path_latest = os.path.join(class_model_dir, f'model_epoch_{epoch}.pth')
+                    torch.save(checkpoint_latest, save_path_latest)
+                    print(f'Saved model at epoch {epoch} to {save_path_latest}')
+
         print('image ROCAUC: %.3f' % (best_img_roc))
+        
+        # Save final model after training completes
+        final_checkpoint = {
+            'epoch': epochs - 1,
+            'A_state_dict': A.state_dict(),
+            'CAS_state_dict': CAS.state_dict(),
+            'optimizer_state_dict': optimizer.state_dict(),
+            'best_img_roc': best_img_roc,
+            'class_name': class_name
+        }
+        final_save_path = os.path.join(class_model_dir, 'final_model.pth')
+        torch.save(final_checkpoint, final_save_path)
+        print(f'Saved final model to {final_save_path}')
 
 if __name__ == '__main__':
     run()
