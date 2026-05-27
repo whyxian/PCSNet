@@ -6,20 +6,17 @@
 
 - PyTorch 1.12, torchvision 0.13, numpy, scipy, matplotlib, tqdm
 - opencv-python, scikit-learn, scikit-image, einops
-- 数据集：MVTec AD（从 [MVTec 官网](https://www.mvtec.com/company/research/datasets/mvtec-ad) 下载），放置于 `./datasets/mvtec/`
-- 自定义 ResNet（`resnet.py`）从 `./initmodel/resnet50_v2.pth` 加载预训练权重 — 请确保该文件存在
+- 数据集放置于 `./datasets/` 目录下，子目录以类别名称命名
+- 主干网络：torch hub 预训练的 Wide ResNet-50-2（`cnn/resnet.py`）
 
 ## 运行命令
 
 ```bash
 # 训练并评估单个类别
-python main.py --class_name toothbrush
-
-# 训练并评估所有 MVTec 类别
-python main.py --class_name all
+python main.py --class_name class_name
 
 # 可选参数
-python main.py --data_path ./datasets/mvtec --save_path ./mvtec_result --size 224
+python main.py --data_path ./datasets --save_path ./result --size 224
 ```
 
 ## 架构
@@ -51,10 +48,8 @@ python main.py --data_path ./datasets/mvtec --save_path ./mvtec_result --size 22
 ### 每类别配置 ([main.py](main.py) 全局字典)
 
 - `WIDTH_BOUNDS_PCT`、`INTENSITY_LOGISTIC_PARAMS`、`NUM_PATCHES`、`MIN_OBJECT_PCT`、`MIN_OVERLAP_PCT` — 每类合成异常生成的超参数
-- `UNALIGNED_OBJECTS`：旋转对称的类别，使用不同的变换
 - `BACKGROUND`：每类前景/背景掩码的背景阈值
-- `OBJECTS` 与 `TEXTURES` 类别定义于 [datasets/mvtec_train.py](datasets/mvtec_train.py)
-- `Descriptor` 中对旋转对象（`grid`、`screw`、`bracket_black`、`bracket_brown`、`tubes`）的特殊处理 — 使用 CoordConv 且通道数为 256/512/1024 而非 128/256/512
+- `Descriptor` 中对旋转对称类别的特殊处理（`utils/adaptor.py` 中 `ROTATION_OBJECTS`） — 使用 CoordConv 且通道数为 256/512/1024 而非 128/256/512
 
 ### 关键文件
 
@@ -65,8 +60,8 @@ python main.py --data_path ./datasets/mvtec --save_path ./mvtec_result --size 22
 | [utils/adaptor.py](utils/adaptor.py) | PFA 子网络：基于原型的特征自适应和评分 |
 | [casnet.py](casnet.py) | CAS 子网络：上下文感知金字塔分割 |
 | [self_sup_tasks.py](self_sup_tasks.py) | 通过补丁克隆/混合合成异常图像 |
-| [datasets/mvtec_train.py](datasets/mvtec_train.py) | 自监督训练数据集，即时合成异常 |
-| [datasets/mvtec_test.py](datasets/mvtec_test.py) | MVTec AD 测试数据集 |
+| [datasets/mvtec_train.py](datasets/mvtec_train.py) | 自监督训练数据集（合成异常即时生成） |
+| [datasets/mvtec_test.py](datasets/mvtec_test.py) | 测试数据集 |
 | [loss.py](loss.py) | FocalLoss 和 SSIM 损失函数 |
 | [utils/metric.py](utils/metric.py) | AUROC、像素 AUROC、PRO AUC 评估 |
 | [resnet.py](resnet.py) | （遗留）带有深度基础茎的自定义 ResNet |

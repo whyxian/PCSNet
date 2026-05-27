@@ -11,7 +11,7 @@ def conv1x1(in_planes: int, out_planes: int, stride: int = 1) -> nn.Conv2d:
     return nn.Conv2d(in_planes, out_planes, kernel_size=1, stride=stride, bias=False)
 
 class adaptor(nn.Module):
-    def __init__(self, model, data_loader, gamma_c, device, class_name):
+    def __init__(self, model, data_loader, gamma_c, device, class_name, skip_centroid_init=False):
         super(adaptor, self).__init__()
         self.device = device
         self.class_name = class_name
@@ -23,9 +23,14 @@ class adaptor(nn.Module):
         self.K = 3
         self.r = nn.Parameter(1e-5 * torch.ones(1), requires_grad=True)
         self.Descriptor = Descriptor(self.class_name).to(device)
-        self._init_centroid(model, data_loader)
-        self.C = rearrange(self.C, 'b c h w -> (b h w) c').detach()
-        self.C = self.C.transpose(-1, -2).detach()
+        if not skip_centroid_init:
+            self._init_centroid(model, data_loader)
+            self.C = rearrange(self.C, 'b c h w -> (b h w) c').detach()
+            self.C = self.C.transpose(-1, -2).detach()
+        else:
+            c_channels = 896 if class_name in ROTATION_OBJECTS else 1792
+            self.C = torch.zeros(c_channels, 4096)
+            self.scale = 64
         self.C = nn.Parameter(self.C, requires_grad=False)
         self.topk_rate = 0.1
 

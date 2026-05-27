@@ -20,178 +20,46 @@ device = torch.device('cuda' if use_cuda else 'cpu')
 import math
 from datasets.mvtec_train import SelfSupMVTecDataset
 
+# 每类配置 — 新增类别时在此添加对应条目
+# width_bounds_pct: ((最小宽度比例, 最大宽度比例), (最小高度比例, 最大高度比例))
+# 小缺陷用 (0.01, 0.05)，大缺陷用 (0.03, 0.4)
 WIDTH_BOUNDS_PCT = {
     'with_defect': ((0.01, 0.05), (0.01, 0.05)),
     '01': ((0.01, 0.05), (0.01, 0.05)),
     '02': ((0.01, 0.05), (0.01, 0.05)),
     '03': ((0.01, 0.05), (0.01, 0.05)),
-    'bracket_black': ((0.01, 0.05), (0.01, 0.05)),
-    'bracket_brown': ((0.01, 0.05), (0.01, 0.05)),
-    'bracket_white': ((0.03, 0.4), (0.03, 0.4)),
-    'connector': ((0.03, 0.4), (0.03, 0.4)),
-    'metal_plate': ((0.03, 0.4), (0.03, 0.4)),
-    'tubes': ((0.03, 0.4), (0.03, 0.4)),
-    'bagel': ((0.03, 0.4), (0.03, 0.4)),
-    'cable_gland': ((0.03, 0.4), (0.03, 0.4)),
-    'carrot': ((0.03, 0.4), (0.03, 0.4)),
-    'cookie': ((0.03, 0.4), (0.03, 0.4)),
-    'dowel': ((0.03, 0.4), (0.03, 0.4)),
-    'foam': ((0.03, 0.4), (0.03, 0.4)),
-    'peach': ((0.03, 0.4), (0.03, 0.4)),
-    'potato': ((0.01, 0.05), (0.01, 0.05)),
-    'rope': ((0.03, 0.4), (0.03, 0.4)),
-    'tire': ((0.03, 0.4), (0.03, 0.4)),
-    'bottle': ((0.03, 0.4), (0.03, 0.4)),
-    'MT_Blowhole': ((0.03, 0.4), (0.03, 0.4)),
-    'cable': ((0.01, 0.05), (0.01, 0.05)),
-    'capsule': ((0.01, 0.05), (0.01, 0.05)),
-    'hazelnut': ((0.01, 0.05), (0.01, 0.1)),
-    'metal_nut': ((0.05, 0.4), (0.05, 0.4)),
-    'pill': ((0.01, 0.05), (0.01, 0.1)),
-    'screw': ((0.01, 0.05), (0.01, 0.05)),
-    'toothbrush': ((0.01, 0.05), (0.01, 0.05)),
-    'transistor': ((0.03, 0.4), (0.03, 0.4)),
-    'zipper': ((0.03, 0.4), (0.03, 0.4)),
-    'carpet': ((0.03, 0.4), (0.03, 0.4)),
-    'grid': ((0.01, 0.05), (0.01, 0.1)),
-    'leather': ((0.01, 0.05), (0.01, 0.05)),
-    'tile': ((0.01, 0.05), (0.01, 0.1)),
-    'wood': ((0.01, 0.05), (0.01, 0.05))
 }
+# 合成补丁与前景目标的最小重叠比例
 MIN_OVERLAP_PCT = {
     'with_defect': 0.25,
     '01': 0.25,
     '02': 0.25,
     '03': 0.25,
-    'bracket_black': 0.25,
-    'bracket_brown': 0.25,
-    'bracket_white': 0.25,
-    'connector': 0.25,
-    'metal_plate': 0.25,
-    'tubes': 0.25,
-    'bagel': 0.25,
-    'cable_gland': 0.25,
-    'carrot': 0.25,
-    'cookie': 0.25,
-    'dowel': 0.25,
-    'foam': 0.25,
-    'peach': 0.25,
-    'potato': 0.25,
-    'rope': 0.25,
-    'tire': 0.25,
-    'bottle': 0.25,
-    'MT_Blowhole': 0.25,
-    'capsule': 0.25,
-    'hazelnut': 0.25,
-    'metal_nut': 0.25,
-    'pill': 0.25,
-    'screw': 0.25,
-    'toothbrush': 0.25,
-    'zipper': 0.25}
+}
+# 补丁区域内前景像素占比下限（值越低，补丁越容易落在背景区域）
 MIN_OBJECT_PCT = {
     'with_defect': 0.7,
     '01': 0.7,
     '02': 0.7,
     '03': 0.7,
-    'bracket_black': 0.7,
-    'bracket_brown': 0.7,
-    'bracket_white': 0.7,
-    'connector': 0.7,
-    'metal_plate': 0.7,
-    'tubes': 0.7,
-    'cable_gland': 0.7,
-    'carrot': 0.7,
-    'cookie': 0.7,
-    'dowel': 0.7,
-    'foam': 0.7,
-    'peach': 0.7,
-    'potato': 0.7,
-    'rope': 0.7,
-    'tire': 0.7,
-    'bottle': 0.7,
-    'MT_Blowhole': 0.7,
-    'capsule': 0.7,
-    'hazelnut': 0.7,
-    'metal_nut': 0.5,
-    'pill': 0.7,
-    'screw': .5,
-    'toothbrush': 0.25,
-    'zipper': 0.7}
-
+}
+# 每张图像合成补丁数量
 NUM_PATCHES = {
     'with_defect': 1,
     '01': 3,
     '02': 3,
     '03': 1,
-    'bracket_black': 1,
-    'bracket_brown': 3,
-    'bracket_white': 1,
-    'connector': 1,
-    'metal_plate': 1,
-    'tubes': 1,
-    'bagel': 1,
-    'cable_gland': 1,
-    'carrot': 1,
-    'cookie': 1,
-    'dowel': 1,
-    'foam': 1,
-    'peach': 1,
-    'potato': 3,
-    'rope': 1,
-    'tire': 1,
-    'MT_Blowhole': 1,
-    'bottle': 1,
-    'cable': 3,
-    'capsule': 1,
-    'hazelnut': 3,
-    'metal_nut': 1,
-    'pill': 2,
-    'screw': 1,
-    'toothbrush': 3,
-    'transistor': 3,
-    'zipper': 3,
-    'carpet': 2,
-    'grid': 3,
-    'leather': 3,
-    'tile': 1,
-    'wood': 3}
-# k, x0 pairs
+}
+# (k, x0) — 合成异常标签的 logistic 强度映射参数
 INTENSITY_LOGISTIC_PARAMS = {
     'with_defect': (1 / 12, 24),
     '01': (1 / 12, 24),
     '02': (1 / 12, 24),
     '03': (1 / 12, 24),
-    'bracket_black': (1 / 12, 24),
-    'bracket_brown': (1 / 12, 24),
-    'bracket_white': (1 / 12, 24),
-    'connector': (1 / 12, 24),
-    'metal_plate': (1 / 12, 24),
-    'tubes': (1 / 12, 24),
-    'bagel': (1 / 12, 24),
-    'cable_gland': (1 / 12, 24),
-    'carrot': (1 / 12, 24),
-    'cookie': (1 / 12, 24),
-    'dowel': (1 / 12, 24),
-    'foam': (1 / 12, 24),
-    'peach': (1 / 12, 24),
-    'potato': (1 / 12, 24),
-    'rope': (1 / 12, 24),
-    'tire': (1 / 12, 24),
-    'MT_Blowhole': (1 / 12, 24),
-    'bottle': (1 / 12, 24),
-    'cable': (1 / 12, 24),
-    'capsule': (1 / 2, 4),'hazelnut': (1 / 12, 24), 'metal_nut': (1 / 3, 7),
-    'pill': (1 / 3, 7), 'screw': (1, 3), 'toothbrush': (1 / 6, 15),
-    'transistor': (1 / 6, 15), 'zipper': (1 / 6, 15),
-    'carpet': (1 / 3, 7), 'grid': (1 / 3, 7), 'leather': (1 / 3, 7), 'tile': (1 / 3, 7),
-    'wood': (1 / 6, 15)}
-
-
-# brightness, threshold pairs
-BACKGROUND = {
-    'bottle': (200, 60), 'screw': (200, 60),
-    'capsule': (200, 60), 'zipper': (200, 60),
-    'hazelnut': (20, 20), 'pill': (20, 20), 'toothbrush': (20, 20), 'metal_nut': (20, 20)}
+}
+# (背景亮度阈值, 容差) — 背景感知跳过，补丁仅放置于前景区域
+# 设为空字典 {} 则禁用（所有区域均可放置补丁）
+BACKGROUND = {}
 
 DEFAULT_SELF_SUP = {
     'width_bounds_pct': ((0.01, 0.08), (0.01, 0.08)),
@@ -204,8 +72,8 @@ DEFAULT_SELF_SUP = {
 #####################################
 def parse_args():
     parser = argparse.ArgumentParser('CFA configuration')
-    parser.add_argument('--data_path', type=str, default='./datasets/mvtec')
-    parser.add_argument('--save_path', type=str, default='./mvtec_result')
+    parser.add_argument('--data_path', type=str, default='./datasets')
+    parser.add_argument('--save_path', type=str, default='./result')
     parser.add_argument("-s", "--setting", type=str, default="Shift-Intensity-923874273")
     parser.add_argument('--Rd', type=bool, default=False)
     parser.add_argument('--size', type=int, choices=[224, 256], default=224)
@@ -240,9 +108,7 @@ def run():
         best_img_roc = -1
         print(' ')
         print('%s | newly initialized...' % class_name)
-        BACKGROUND = {'bracket_white': (130, 60), 'bottle': (200, 60), 'screw': (200, 60), 'capsule': (200, 60),
-                      'zipper': (200, 60),
-                      'hazelnut': (20, 20), 'pill': (20, 20), 'toothbrush': (20, 20), 'metal_nut': (20, 20)}
+        BACKGROUND = {}
 
         # load data
         train_transform = T.Compose([
@@ -303,6 +169,11 @@ def run():
             model.eval()
             MSE_loss = torch.nn.MSELoss().to(device)
             tr_entropy_loss_func = torch.nn.CrossEntropyLoss(reduction='sum').to(device)
+            epoch_loss_nfc = 0
+            epoch_loss_afs = 0
+            epoch_loss_pdc = 0
+            epoch_loss_seg = 0
+            num_batches = 0
             for (x, aug_img, _, _, mask0, mask1) in train_loader:
                 if x.shape[0] % 2 == 1:
                     a = x.shape[0] / 2 + 1
@@ -331,34 +202,54 @@ def run():
                 loss = L_NFC + L_AFS + L_PDC * 50 + L_SEG * 40
                 loss.backward()
                 optimizer.step()
-            print('loss: {:.4f}'.format(loss.item()))
+                epoch_loss_nfc += L_NFC.item()
+                epoch_loss_afs += L_AFS.item()
+                epoch_loss_pdc += L_PDC.item()
+                epoch_loss_seg += L_SEG.item()
+                num_batches += 1
 
-            if epoch % 10 == 0:
-                gt_list = list()
-                heatmaps = None
-                A.eval()
-                CAS.eval()
-                model.eval()
-                for x, y, mask in tqdm(test_loader):
-                    gt_list.extend(y.cpu().detach().numpy())
-                    with torch.no_grad():
-                        ori_feature = model(x.to(device))
-                        score, feature = A(ori_feature, 2, None)
-                        score = CAS(feature, score)
-                    heatmap = score.cpu().detach()
-                    heatmap = torch.mean(heatmap, dim=1)
-                    heatmaps = torch.cat((heatmaps, heatmap), dim=0) if heatmaps != None else heatmap
-                heatmaps = upsample(heatmaps, size=x.size(2), mode='bilinear')
-                heatmaps = gaussian_smooth(heatmaps, sigma=4)
+            avg_nfc = epoch_loss_nfc / num_batches
+            avg_afs = epoch_loss_afs / num_batches
+            avg_pdc = epoch_loss_pdc / num_batches
+            avg_seg = epoch_loss_seg / num_batches
+            avg_total = avg_nfc + avg_afs + avg_pdc * 50 + avg_seg * 40
+            print('[%d/%d] NFC: %.4f | AFS: %.4f | PDC: %.4f | SEG: %.4f | total: %.4f'
+                  % (epoch + 1, epochs, avg_nfc, avg_afs, avg_pdc, avg_seg, avg_total))
 
-                scores = rescale(heatmaps)
+            # 每轮评估
+            gt_list = list()
+            heatmaps = None
+            A.eval()
+            CAS.eval()
+            model.eval()
+            for x, y in test_loader:
+                gt_list.extend(y.cpu().detach().numpy())
+                with torch.no_grad():
+                    ori_feature = model(x.to(device))
+                    score, feature = A(ori_feature, 2, None)
+                    score = CAS(feature, score)
+                heatmap = score.cpu().detach()
+                heatmap = torch.mean(heatmap, dim=1)
+                heatmaps = torch.cat((heatmaps, heatmap), dim=0) if heatmaps != None else heatmap
+            heatmaps = upsample(heatmaps, size=x.size(2), mode='bilinear')
+            heatmaps = gaussian_smooth(heatmaps, sigma=4)
 
-                fpr, tpr, img_roc_auc = cal_img_roc(scores, gt_list)
-                best_img_roc = img_roc_auc if img_roc_auc > best_img_roc else best_img_roc
+            scores = rescale(heatmaps)
 
-                print('[%d / %d]image ROCAUC: %.3f | best: %.3f' % (epoch, epochs, img_roc_auc, best_img_roc))
+            img_roc_auc = cal_img_roc(scores, gt_list)[2]
+            best_img_roc = img_roc_auc if img_roc_auc > best_img_roc else best_img_roc
+
+            print('[%d/%d] imgAUROC: %.3f | best: %.3f'
+                  % (epoch + 1, epochs, img_roc_auc, best_img_roc))
 
         print('image ROCAUC: %.3f' % (best_img_roc))
+
+        # save trained models
+        save_dir = os.path.join(args.save_path, class_name)
+        os.makedirs(save_dir, exist_ok=True)
+        torch.save(A.state_dict(), os.path.join(save_dir, 'adaptor.pth'))
+        torch.save(CAS.state_dict(), os.path.join(save_dir, 'cas.pth'))
+        print('Models saved to %s' % save_dir)
 
 if __name__ == '__main__':
     run()
